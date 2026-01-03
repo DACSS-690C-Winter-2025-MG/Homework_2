@@ -1,0 +1,161 @@
+<center><img src="https://github.com/DACSS-CSSmeths/guidelines/blob/main/pics/small_logo_ccs_meths.jpg?raw=true" width="700"/></center>
+
+# Social Networks in R
+
+------------------------------------------------------------------------
+
+## Hollywood Actors Network Analysis
+
+### Getting Ready
+
+#### Install and activate libraries needed. Let's verify:
+
+```{r setup}
+# Install and activate necessary libraries and set random seed
+set.seed(1111)
+library(igraph)
+library(ggplot2)
+library(ggraph)
+
+# Verify libraries are installed
+librariesNeeded=c("igraph","ggplot2","ggraph")
+librariesNeeded %in% rownames(installed.packages())
+```
+
+### Network Creation from dataframes
+
+#### Read the graph from GitHub (cloud)
+
+```{r read-graph}
+# Read graph from GitHub
+fileLink <- 'https://github.com/DACSS-690C-Winter-2025-MG/Homework_2/raw/main/hollywood.graphml'
+actors <- read_graph(fileLink, format = 'graphml')
+
+summary(actors)
+```
+
+### Exploration of Network nodes
+
+#### Compute node centrality measures
+
+```{r centrality}
+# Compute centrality measures
+eigen <- eigen_centrality(actors)$vector
+close <- closeness(actors, normalized = TRUE)
+betw <- betweenness(actors, normalized = TRUE)
+
+# Create dataframe
+DFCentrality <- as.data.frame(cbind(eigen, close, betw), stringsAsFactors = FALSE)
+names(DFCentrality) <- c('Eigenvector', 'Closeness', 'Betweenness')
+DFCentrality$person <- row.names(DFCentrality)
+row.names(DFCentrality) <- NULL
+
+# Display results
+head(DFCentrality)
+```
+
+#### Correlation plot with centrality measures
+
+```{r correlation-plot}
+# Create correlation plot
+ggplot(DFCentrality, aes(x = Betweenness, y = Closeness)) + 
+    theme_classic() +
+    geom_text(aes(label = person, size = Eigenvector), show.legend = TRUE, alpha = 0.5)
+```
+
+**Comment on the correlation plot:**
+
+Al Pacino and Robert De Niro (high Eigenvector) are the most central actors, connected to the most well-connected individuals, forming the network's core. However, despite their centrality, both have zero betweenness and low closeness, indicating they work within a tight-knit clique rather than bridging diverse groups. 
+
+In contrast, Tom Hanks is the network's key connector with the highest betweenness and closeness, serving as the primary bridge between different actor communities and the most accessible to all others. Matt Damon and Leonardo DiCaprio also function as important bridges with moderate-to-high betweenness scores. Meanwhile, Tom Hardy, Morgan Freeman, Jack Nicholson, and Christian Bale remain peripheral.
+
+Overall, the network exhibits a clear structure with Pacino and De Niro at the dense center, Hanks as the universal connector, and several actors on the margins.
+
+### Communities
+
+#### Potential Communities?
+
+```{r communities-check}
+# Compute random network with same size and density
+RandomNet <- sample_gnp(length(V(actors)), p = edge_density(actors))
+
+# Get Transitivity ratio
+transitivity_ratio <- transitivity(actors) / transitivity(RandomNet)
+print(paste("Transitivity ratio:", transitivity_ratio))
+```
+
+**Answer:**
+
+Communities are likely present if the transitivity ratio is greater than 1. While the transitivity ratio is 0.875, let's take a look at the computations if there were presence of community.
+
+#### Two approaches
+
+##### a. Girvan-Newman
+
+```{r girvan-newman}
+# Girvan-Newman algorithm
+partition_girvanNewman_best <- cluster_edge_betweenness(actors)
+
+# Display partition
+table(membership(partition_girvanNewman_best))
+
+# Modularity
+gn_modularity <- max(partition_girvanNewman_best$modularity)
+print(paste("Girvan-Newman Modularity:", gn_modularity))
+```
+
+##### b. Louvain
+
+```{r louvain}
+# Louvain algorithm
+partition_louvain_optimal <- cluster_louvain(actors)
+
+# Display partition
+table(membership(partition_louvain_optimal))
+
+# Modularity
+louvain_modularity <- max(partition_louvain_optimal$modularity)
+print(paste("Louvain Modularity:", louvain_modularity))
+```
+
+##### Determine which algorithm has better modularity
+
+```{r best-result}
+# Determine which algorithm has better modularity
+if (louvain_modularity > gn_modularity) {
+    cat("Louvain has better modularity. Plotting Louvain communities.\n")
+    V(actors)$community <- as.factor(membership(partition_louvain_optimal))
+    algorithm_used <- "Louvain"
+} else {
+    cat("Girvan-Newman has better modularity. Plotting Girvan-Newman communities.\n")
+    V(actors)$community <- as.factor(membership(partition_girvanNewman_best))
+    algorithm_used <- "Girvan-Newman"
+}
+```
+
+#### Plot the best result
+
+```{r plot-communities}
+# Plot communities
+base <- ggraph(graph = actors, layout = 'fr') + geom_edge_link(alpha = 0.2)
+base + geom_node_point(aes(color = community), show.legend = TRUE, size = 4) +
+    labs(title = paste("Community Detection using", algorithm_used))
+```
+
+```{r alternative-plot}
+# Alternative visualization with hive plot
+V(actors)$degree <- degree(actors)
+
+ggraph(actors, layout = 'hive', 
+       axis = community,
+       sort.by = degree) +   
+  geom_edge_hive(color = 'grey80') +   
+  geom_axis_hive(aes(colour = community), label = FALSE) + 
+  geom_node_point(aes(colour = community)) +
+  geom_node_text(aes(label = name), 
+                 repel = TRUE, 
+                 max.overlaps = 50,
+                 size = 2.5) +
+  coord_fixed() +
+  labs(title = paste("Hive Plot -", algorithm_used, "Communities"))
+```
