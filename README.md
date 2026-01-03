@@ -1,7 +1,7 @@
 # Hollywood Actors Network Analysis
 
 ## Assignment
-Social network analysis of Hollywood actors examining collaboration patterns through film co-appearances. Analysis includes centrality measures and community detection using Girvan-Newman and Louvain algorithms.
+Social network analysis of Hollywood actors examining collaboration patterns through film co-appearances. Analysis includes centrality measures and community detection using transitivity ratio computations.
 
 Code is in the index.Rmd file of the repo
 
